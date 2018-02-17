@@ -1,0 +1,191 @@
+	<h2>Character Sheet</h2>
+	<div class="row">
+		<!-- DATA ENTRY -->
+		<div class="col-md-6">
+		<div *ngIf="attributesLocked">
+			<form  novalidate class="form-inline" >
+				<span class="input-group">
+					<span class="input-group-btn btn-group-sm">
+						<button type="button" class="btn btn-default btn-sm" (click)="toggleDetailsLock()" 
+											[disabled]="!attributesLocked || !isDetailsValid() || !hpLocked">
+							<span class="fa "  [ngClass]="{'fa-lock': !detailsLocked, 'fa-unlock': detailsLocked}"></span>
+						</button>
+					</span>
+						<span class="input-group-btn btn-group-sm">
+							<button type="button" class="btn btn-default btn-sm" (click)="generateName()" [disabled]="!character.raceName || detailsLocked || !attributesLocked">
+							<span class="fa fa-magic"></span>
+						</button>
+					</span>
+					<input type="text" class="form-control form-control-sm" [(ngModel)]="character.name" placeholder="Name" name="name" [disabled]="detailsLocked">
+					<input type="text" class="form-control form-control-sm" [(ngModel)]="character.nickname" placeholder="NickName" name = "nickname" [disabled]="detailsLocked">
+				</span>
+			</form>
+
+			<div id="gender" class="row">
+				<label>
+					Gender:
+					<select-by-label [options]="['Male','Female','It\'s Complicated']" [disabled]="detailsLocked" [(selected)]="character.gender" collapseWhenSelected="true">
+					</select-by-label>
+				</label>
+			</div>
+			<div id="class" class="row">
+				<label>
+					Class:
+					<select-by-label [options]="getValidClasses()" [disabled]="detailsLocked" [(selected)]="character.className" displayProperty="name" returnObject="false" collapseWhenSelected="true">
+					</select-by-label>
+				</label>
+			</div>
+			<div id="race" class="row">
+				<label>
+					Race:
+					<select-by-label [options]="getValidRaces()" [disabled]="detailsLocked" [(selected)]="character.raceName" displayProperty="name" returnObject="false" collapseWhenSelected="true">
+					</select-by-label>
+				</label>
+			</div>
+			<div id="alignment" class="row">
+				<label>
+					Alignment:
+					<select-by-label [options]="['Lawful','Neutral','Chaotic']" [disabled]="detailsLocked" [(selected)]="character.alignmentLaw" collapseWhenSelected="true">
+					</select-by-label>
+					/
+					<select-by-label [options]="['Good','Neutral','Evil']" [disabled]="detailsLocked" [(selected)]="character.alignmentGood" collapseWhenSelected="true">
+					</select-by-label>
+
+				</label>
+			</div>
+			<!-- HP and other uneditables -->
+			<div>
+				<label>HP:
+					<span class="label"><strong>{{character.hitPoints}}</strong></span>
+				</label>
+				<label>XP:
+					<span class="label"><strong>{{character.experiencePoints}}</strong></span>
+				</label>
+				<label>Level:
+					<span class="label"><strong>{{character.level}}</strong></span>
+				</label>
+				<label>Gold:
+					<span class="label"><strong>{{character.gold}}</strong></span>
+				</label>
+			</div>
+		</div>
+		<!-- ATTRIBUTE TOOLBAR -->
+			<span class="btn-group btn-group-sm">
+				<button type="button" class="btn btn-default" (click)="toggleAttributeLock()" [disabled]="(detailsLocked && attributesLocked) || !character.attributes || character.attributes.length==0 ">
+					<span class="fa" [ngClass]="{'fa-lock': !attributesLocked, 'fa-unlock': attributesLocked}">
+					</span>
+				</button>
+				<button type="button" class="btn btn-default" (click)="generateAttributes()" [disabled]="attributesLocked || rollCount >= allowedRolls">
+					<span class="fa fa-magic"></span>
+				</button>
+				<span>&nbsp; Remaining Rolls: {{allowedRolls-rollCount}}</span>
+			</span>
+			<!-- ATTRIBUTES -->
+			<div class="row">
+				<!--Attributes-->
+				<div class="col-md-6">
+						<div class="row" *ngFor="let attribute of character.attributes; let i=index">
+							<div class="col-md-3 text-right">{{attribute.key}}: </div>
+							<div class="col-md-2 text-justify">
+								<span class="badge" [draggable]="!attributesLocked" droppable [dragData]="attribute" (onDrop)="onAttributeDrop($event)"	[ngClass]="selectedIndex == i ? 'badge-success' : 'badge-default'" (click)="selectIndex(i)" [id]="attribute.key">
+									<span *ngIf="attribute.value + getAttributeRaceMod(attribute.key, character.raceName, character.className)<10">&nbsp;
+									</span>
+									{{attribute.value + getAttributeRaceMod(attribute.key, character.raceName, character.className)}}
+								</span>
+								<span class="notification-badge" *ngIf="getAttributeRaceMod(attribute.key, character.raceName, character.className)!=0">
+									{{getAttributeRaceMod(attribute.key, character.raceName, character.className) | modifier}}
+								</span>
+							</div>
+						</div>
+				</div>
+				<!--Saving Throws-->
+				<div class="col-md-6">
+				</div>
+			</div>
+
+		</div>
+		<!--RACE and CLASS data -->
+		<div class="col-md-6">
+			<ngb-tabset type="pills">
+				<ngb-tab title="Races">
+					<template ngbTabContent>
+						<select-by-label [options]="cs.getRaces()" [(selected)]="infoRace" displayProperty="name" returnObject="false">
+						</select-by-label>
+						<race-info [raceName]="infoRace"></race-info>
+					</template>
+				</ngb-tab>
+				<ngb-tab title="Classes">
+					<template ngbTabContent>
+						<select-by-label [options]="cs.getClasses()" [(selected)]="infoClass" displayProperty="name" returnObject="false">
+						</select-by-label>
+						<class-info [className]="infoClass"></class-info>
+					</template>
+				</ngb-tab>
+				<ngb-tab title="Specs">
+					<template ngbTabContent>
+						<ngb-tabset>
+							<ngb-tab title="Saving Throws">
+								<template ngbTabContent>
+									<saving-throw-chart [attributes]="getAdjustedAttributes(character.attributes)" [raceName]="character.raceName" [className]="character.className" [level]="character.level" [attributesJson]="JSON.stringify(character.attributes)">
+									</saving-throw-chart>
+								</template>
+							</ngb-tab>
+							<ngb-tab title="Ability Mods" class="small" *ngIf="character.attributes && character.attributes.length>0">
+								<template ngbTabContent>
+									<table class="table table-specs">
+										<ng-container *ngFor="let ability of cs.getAttributeAbilityModList(getAdjustedAttributes())">
+										<tr *ngIf="ability.value && ability.value!=0 && !isNaN(ability.value) && (!character.className || isIn(ability.classes,character.className))"
+												[ngClass]="{'text-warning':!character.className && ability.classes}">
+											<td>
+												{{ability.name | caseConvert: 'FC'}}
+											</td>
+											<td class="text-right"> 
+												<span *ngIf="ability.type=='MOD'">
+													{{(ability.value < 0 ? ability.value : '+' + ability.value) + (ability.isPercent ? '%' : '')}}
+												</span>
+												<span *ngIf="ability.type=='VALUE'">
+													{{ability.value + (ability.isPercent ? '%' : '')}}
+												</span>
+												<span *ngIf="ability.type=='DESCRIPTION'">
+													{{ability.description}}
+												</span>
+											</td>
+										</tr>
+									</ng-container>
+									</table>
+								</template>
+							</ngb-tab>
+							<ngb-tab title="Tables" class="small" *ngIf="character.attributes && character.attributes.length>0">
+								<template ngbTabContent>
+									<table class="table table-specs">
+										<ng-container *ngFor="let table of cs.getRelevantTables(character)">
+											<tr>
+												<td>
+													{{table.name}}
+												</td>
+											</tr>
+											<tr>
+												<td>
+													{{table.description}}
+												</td>
+											</tr>
+											<tr>
+												<td>
+													<table>
+														<tr>
+															<td>
+															</td>
+														</tr>
+													</table>
+												</td>
+											</tr>
+										</ng-container>
+									</table>
+								</template>
+							</ngb-tab>
+						</ngb-tabset>
+					</template>
+				</ngb-tab>
+			</ngb-tabset>
+		</div>
+	</div>
