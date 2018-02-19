@@ -2,8 +2,12 @@ import { Injectable } from '@angular/core';
 import { ATTRIBUTES, RACES, CLASSES, XP_ADJUSTMENTS, SPELLS, CLASS_GROUP_XREF, 
 				SAVING_THROW_NAMES, SAVING_THROWS, ATTRIBUTE_ABILITY_MODIFIERS_XREF, 
 				ATTRIBUTE_ABILITY_MODIFIERS, LANGUAGE_PROFICIENCY, ATTACK_TABLES } from  './constants';
-import { Attribute, Character } from './character.class';
+import { Attribute, Character, STAGE } from './character.class';
 import { NAMES } from './mock-names';
+
+import { AuthService } from './auth.service';
+import { AngularFireDatabase } from 'angularfire2/database';
+
 
 @Injectable()
 export class DataService {
@@ -20,8 +24,46 @@ export class DataService {
 	AttributeAbilityModifiers = ATTRIBUTE_ABILITY_MODIFIERS;
 	Names = NAMES;
 	LanguageProficiency = LANGUAGE_PROFICIENCY;
+	
+	user: any;
+	urls: any = {};
+	
+	dbObservable: any;
+	
+	public userData: any = {
+		userRolls: {},
+		userCharacter: {}
+	}
 
-	constructor() {
+	constructor(private authService: AuthService, private db: AngularFireDatabase) {
+		authService.user.subscribe( user => {
+			this.user = user;
+
+			if (user) {
+				this.urls.user = 'Users/' + user.uid;
+				this.urls.userRolls = this.urls.user + '/RollCounts';
+				this.urls.userCharacter = this.urls.user + '/Character';
+				this.db.object(this.urls.userRolls).valueChanges().subscribe(values => {
+					//console.log('changeValues',snapshot);
+					if (!values) {
+						values = { 'attributeRolls':0,'xpRolls':0 }
+						this.db.object(this.urls.userRolls).set(values);
+					}
+					Object.assign(this.userData.userRolls,values);
+				});
+				this.db.object(this.urls.userCharacter).valueChanges().subscribe(values => {
+					//console.log('changeValues',snapshot);
+					if (!values) {
+						values = new Character();
+						this.db.object(this.urls.userCharacter).set(values);
+					}
+					Object.assign(this.userData.userCharacter, values);
+				});
+			}	else {
+				this.userData = {};
+				this.urls = {};
+			}
+		});
 	}
 
 	getAcZeroHit(className: string, level: number) {
@@ -56,16 +98,6 @@ export class DataService {
 		}
 		return null;
 	}
-
-	// getModifiedValue(key: string, character: Character): any {
-	// 	let modifiedValue = {
-	// 		key: key,
-	// 		originalValue: value,
-	// 		modifications: any[],
-	// 		actualValue: null
-	// 	}
-	// 	let raceMod = getRaceModification(key, value,)
-	// }
 
 	/**
 	 * Search an array of objects and return the object with the matching property
@@ -189,7 +221,24 @@ export class DataService {
 		}
 		if (!values) return null;
 		
-		
 		return table;
 	}
+	
+	incrementRoll(rollType: string) {
+		this.userData.userRolls[rollType]++;
+		this.updateRollCount(this.userData.userRolls);
+	}
+	
+	updateRollCount(countObj) {
+		let upObject = {};
+		upObject[this.urls.userRolls]=countObj;
+		this.db.object('/').update(upObject);
+	}
+	updateCharacter(character: Character) {
+		let upObject = {}
+		upObject[this.urls.userCharacter] = character;
+		this.db.object('/').update(upObject);
+		
+	}
+		
 }

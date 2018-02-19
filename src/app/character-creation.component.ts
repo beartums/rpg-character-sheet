@@ -1,7 +1,7 @@
 import { Component }              from '@angular/core';
 //import { FormArray, FormBuilder, FormGroup, Validators } from '@angular/forms';
 //import { RollService } from './roll.service'
-import { Character, Attribute } from './character.class';
+import { Character, Attribute, STAGE } from './character.class';
 import { CharacterService } from './character.service';
 import { DataService } from './data.service';
 import { HostListener } from '@angular/core';
@@ -13,32 +13,40 @@ import { HostListener } from '@angular/core';
 	providers: [CharacterService, DataService],
 })
 
-export class CharacterCreationComponent  {
 
-	character: Character = new Character();
+export class CharacterCreationComponent  {
+	
+
+	character: Character = this.ds.userData.userCharacter;
 
 	rollCount: number = 0;
 	allowedRolls: number = 3;
+	
+	// for dragging and dropping attributes
+	draggingKey: string = '';
 
 	selectedIndex:number;
 	detailsLocked: boolean = true;
 	attributesLocked: boolean = false;
 	hpLocked: boolean = true;
+	STAGE = STAGE;
 
 	JSON = JSON;
 	isNaN = isNaN;
 
 	constructor(private cs: CharacterService, private ds: DataService) {
-		this.character.level=1
-		this.character.experiencePoints=0;
-		this.character.gold = 0;
+		//this.character.level=1
+		//this.character.experiencePoints=0;
+		//this.character.gold = 0;
 		// this.character.goldPieces=0
 	}
-
+	
 	generateAttributes(): void {
 		this.character.attributes = this.cs.generateAttributesArray();
 		this.selectedIndex = null;
-		this.rollCount++;
+		this.ds.incrementRoll('attributeRolls');
+		// save values
+		this.ds.updateCharacter(this.character);
 	}
 
 	generateName(raceName?:string, gender?: string): void {
@@ -55,11 +63,12 @@ export class CharacterCreationComponent  {
 		}
 	}
 
-	getAdjustedAttributes(attributes: Attribute[]): Attribute[] {
+	getAdjustedAttributes(attributes?: Attribute[], raceName?: string): Attribute[] {
 		attributes = attributes || this.character.attributes;
+		raceName = raceName || this.character.raceName
 		if (!attributes || attributes.length < 1) return [];
-		if (!this.character.raceName) return attributes;
-		return this.cs.getAdjustedAttributes(attributes, this.character.raceName);
+		if (!raceName) return attributes;
+		return this.cs.getAdjustedAttributes(attributes, raceName);
 	}
 
 	getAttribute(attributes: Attribute[], key: string): Attribute {
@@ -168,6 +177,8 @@ export class CharacterCreationComponent  {
 		b.value = c;
 		// move selection to the attribute that got the moving value
 		this.selectedIndex = newIndex;
+		//this.ds.updateCharacter(this.character);
+
 	}
 
 	/**
@@ -175,59 +186,89 @@ export class CharacterCreationComponent  {
 	 * swap the value of the dropped att with the target att
 	 * @param {any} event Event object
 	 */
-	onAttributeDrop(event:any): void {
+	drop(event:any): void {
+		//console.log(event);
 		// get the target attribute
-		let key = event.nativeEvent.currentTarget.id;
+		let key = event.srcElement.id;
 		let targetAttribute = this.getAttribute(this.character.attributes, key);
 		// gt the source attribute
-		key = event.dragData.key;
+		//key = event.dragData.key;
+		key = this.draggingKey;
 		let sourceAttribute = this.getAttribute(this.character.attributes, key);
-
+		this.draggingKey = '';
+		
 		if (!targetAttribute || !sourceAttribute || sourceAttribute == targetAttribute) return;
 		let hold = sourceAttribute.value;
 		sourceAttribute.value = targetAttribute.value;
 		targetAttribute.value = hold;
+		this.ds.updateCharacter(this.character);
+
+	}
+	
+	dragStart(event: any) {
+		//console.log(event);
+		this.draggingKey = event.srcElement.id;
+	}
+	allowDrop(event) {
+		event.preventDefault();
 	}
 
-	/**
-	 * Lock the attribute-generation and allow editing of other detailsLocked
-	 * @return {void} [description]
-	 */
-	toggleAttributeLock() {
-		// ignore if the details are locked
-		if (this.detailsLocked && this.attributesLocked) return;
-		this.selectedIndex = null;
-		this.attributesLocked = !this.attributesLocked;
-		this.detailsLocked = !this.attributesLocked;
-		// clear the details -- should not be filled out if attributes are unlocked
-		this.clearDetails();
-	}
-
-	toggleDetailsLock() {
-		this.detailsLocked = !this.detailsLocked;
-		if (!this.detailsLocked) {
-			// we just unlocked, so wipe it
-			this.character.gold = 0;
-			this.character.experiencePoints = 0;
-			this.character.level = 0;
-			this.character.hitPoints = 0
+	toggleAttributeStage() {
+		// if stage is completed, cannot toggle the attributes
+		if (this.character.stage == STAGE.Complete) return;
+		// if stage is details, then moving back to attributes
+		else if (this.character.stage == STAGE.Details) {
+			this.clearDetails() // make sure the details are nulled
+			this.ds.updateCharacter(this.character); // save to firebase	
+			this.character.stage = STAGE.Attributes;
 		} else {
+			this.ds.updateCharacter(this.character);
+			this.character.stage = STAGE.Details;			
+		}
+		this.ds.updateCharacter(this.character);
+	}
+
+	toggleDetailsStage() {
+		if (this.character.stage == STAGE.Attributes) return;
+		// if stage is details, then moving on to completed
+		else if (this.character.stage == STAGE.Details) {
+			this.generateBeginningBalances(this.character);
+			this.ds.updateCharacter(this.character); // save to firebase	
+			this.character.stage = STAGE.Complete;
+			this.ds.incrementRoll("xpRolls");
+		// if stage is completed, then move back to details
+		} else {
+			this.clearBeginningBalances(this.character);
+			this.ds.updateCharacter(this.character);
+			this.character.stage = STAGE.Details;			
+		}
+		this.ds.updateCharacter(this.character);
+	}
+	
+	generateBeginningBalances(character: Character) {
 			// generate starting gold (with a little bit of luck thrown in
 			let luck = this.cs.roll('1d10');
 			let luckMultiplier = luck == 1 ? 1 :
 														luck == 10 ? 100 : 10;
-			this.character.gold = this.cs.roll('3d6') * luckMultiplier;
+			character.gold = this.cs.roll('3d6') * luckMultiplier;
 			// Generate Starting XP
 			luck = this.cs.roll('1d10');
 			luckMultiplier = luck == 1 ? 1 :
 														luck == 10 ? 100 : 10;
-			this.character.experiencePoints = this.cs.roll('5d6k3') * luckMultiplier;
-			this.character.level = this.cs.getClassLevel(this.character.className,this.character.experiencePoints);
-//			let hpSpecs = this.cs.getClassLevelHpSpecs(this.character.className,this.character.level);
-			this.character.hitPoints = this.cs.generateHitPoints(this.character.className, this.character.level,this.character.attributes);
-		}
+			character.experiencePoints = this.cs.roll('5d6k3') * luckMultiplier;
+			character.level = 
+					this.cs.getClassLevel(character.className,character.experiencePoints);
+			character.hitPoints = 
+					this.cs.generateHitPoints(character.className, character.level,
+									this.getAdjustedAttributes(character.attributes, character.raceName));
 	}
-
+	clearBeginningBalances(character: Character) {
+		character.experiencePoints = 0;
+		character.gold = 0;
+		character.level = 1;
+		character. hitPoints = 0;
+	}
+		
 	isDetailsValid(): boolean {
 		if (!this.character.gender) return false;
 		if (!this.character.className) return false;
@@ -256,7 +297,7 @@ export class CharacterCreationComponent  {
 	 * @param {number} idx Index of the attribute to be moved
 	 */
 	selectIndex(idx: number): void {
-		if (this.attributesLocked) return;
+		if (this.character.stage != STAGE.Attributes) return;
 		if (this.selectedIndex == idx) this.selectedIndex = null;
 		else this.selectedIndex = idx;
 	}

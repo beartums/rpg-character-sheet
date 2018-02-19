@@ -591,7 +591,7 @@ export const CLASSES = [
 	},
 	// RANGER
 	{
-		name: "Ranger", savingThrowGroup: 3, hitDieSides: 8, attackGroup: 3,
+		name: "Ranger", savingThrowGroup: 3, hitDieSides: 6, attackGroup: 3,
 		classGroup: 'Fighter',
 		description: 'This sub-class of the fighter is a specialist of wilderness survival, ' +
 					'whether that wilderness be above or below ground. They adhere ' +

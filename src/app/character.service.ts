@@ -75,7 +75,7 @@ export class CharacterService {
 			}
 			let con = this.ds.getObjectByProperty(attributes,'key','CON');
 			let mod = this.getAbilityModByAbility('hitPointsPerDie',con.key,con.value);
-			let modifier = mod.value + hpSpecs.points;
+			let modifier = mod.value * hpSpecs.dice + hpSpecs.points;
 			let rollNotation = `${hpSpecs.dice}d${hpSpecs.sides}+${modifier}`;
 			return Roll.roll(rollNotation);
 		}

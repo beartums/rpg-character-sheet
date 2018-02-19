@@ -2,21 +2,25 @@
 export enum AlignmentLaw {
 	"Lawful", "Neutral", "Good"
 }
+
+export enum STAGE { Attributes, Details, Complete }
+
 export class Character {
 	name: string;
 	nickname: string;
-	level: number;
+	level: number = 0;
 	gender: string;
 	className: string;
 	raceName: string;
-	hitPoints: number;
-	experiencePoints: number;
+	hitPoints: number = 0;
+	experiencePoints: number = 0;
 	alignmentLaw: string;
 	alignmentGood: string;
 	attributes: Attribute[];
 	equipment: Equipment;
 	treasure: Treasure[];
-	gold: number;
+	gold: number = 0;
+	stage: STAGE = STAGE.Attributes;
 }
 
 export class Attribute {
