@@ -3,7 +3,7 @@ export enum AlignmentLaw {
 	"Lawful", "Neutral", "Good"
 }
 
-export enum STAGE { Attributes, Details, Complete }
+export enum STAGE { Attributes, Details, Equipment, Spells, Complete }
 
 export class Character {
 	name: string;
@@ -17,10 +17,12 @@ export class Character {
 	alignmentLaw: string;
 	alignmentGood: string;
 	attributes: Attribute[];
-	equipment: Equipment;
+	equipment: Equipment = new Equipment();
 	treasure: Treasure[];
 	gold: number = 0;
 	stage: STAGE = STAGE.Attributes;
+	attributeRolls?: number = 0;
+	xpRolls?: number = 0;
 }
 
 export class Attribute {
@@ -29,28 +31,29 @@ export class Attribute {
 
 
 export class Equipment {
-	gear: Gear[];
-	weapons: Weapon[];
-	armor: Armor[];
-	inUse: any[];
+	gear: Array<Gear> = [];
+	//weapons: Weapon[];
+	//armor: Armor[];
+	//inUse: any[];
 }
 
 export class Gear {
 	name: string;
 	cost: number;
 	denomination: string;
-	weight: number;
+	pounds: number;
+	type: string;
+	notes: string;
+	count?: number;
 }
 
 export class Weapon extends Gear {
-	description: string;
-	damageOneHanded: string;					 // roll notation
-	damageTwoHanded: string;
+	oneHandDamage: string;					 // roll notation
+	twoHandDamage: string;
 }
 export class Armor extends Gear {
-	description: string;
 	armorClass: number;
-	armorClassMod: number;
+	armorClassMod?: number;
 }
 
 export class Treasure {

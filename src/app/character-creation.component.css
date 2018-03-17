@@ -3,14 +3,13 @@
 }
 
 .notification-badge {
-    font-size: .4em;
+    font-size: .6em;
 
-    display: block;
-    position: absolute;
-    top: -.2em;
-    right: -.2em;
-    width: 2em;
-    height: 2em;
+    position: relative;
+		top: -.7em;
+    right: .9em;
+    width: 8em;
+    height: 4em;
     line-height: 2em;
     border-radius: 35%;
     text-align: center;

@@ -1,7 +1,7 @@
 import { Component }              from '@angular/core';
 //import { FormArray, FormBuilder, FormGroup, Validators } from '@angular/forms';
 //import { RollService } from './roll.service'
-import { Character, Attribute, STAGE } from './character.class';
+import { Character, Attribute, STAGE, Gear } from './character.class';
 import { CharacterService } from './character.service';
 import { DataService } from './data.service';
 import { HostListener } from '@angular/core';
@@ -15,10 +15,12 @@ import { HostListener } from '@angular/core';
 
 
 export class CharacterCreationComponent  {
-	
 
 	character: Character = this.ds.userData.userCharacter;
-
+	cart: Set<any> = new Set();
+	
+	isCartShowing: Boolean = false;
+	
 	rollCount: number = 0;
 	allowedRolls: number = 3;
 	
@@ -41,10 +43,20 @@ export class CharacterCreationComponent  {
 		// this.character.goldPieces=0
 	}
 	
+	arrayFrom<T>(aSet: Set<T>): Array<T> {
+		let anArray =  Array.from(aSet);
+		return anArray;
+	}
+	
+	setFrom<T>(anArray: Array<T>): Set<T> {
+		let aSet =  new Set(anArray);
+		return aSet;
+	}
+	
 	generateAttributes(): void {
 		this.character.attributes = this.cs.generateAttributesArray();
 		this.selectedIndex = null;
-		this.ds.incrementRoll('attributeRolls');
+		this.character.attributeRolls++
 		// save values
 		this.ds.updateCharacter(this.character);
 	}
@@ -83,10 +95,42 @@ export class CharacterCreationComponent  {
 		return this.cs.getAttributeRaceMod(attributeKey, raceName, className)
 	}
 
-	// getModifiedValue(key: string, value: number, raceName?: string, classname?: string): any {
-	// 	//return this.ds.getModifiedValue(key, value, raceName, className);
-	// }
+	getCartWeight(cart: Set<Gear>): number {
+		let totWeight = 0;
+		cart.forEach((item) => {
+			if (item.pounds && !isNaN(item.pounds)) {
+			 totWeight += item.pounds * item.count;
+			}
+		});
+		return totWeight
+	}	
 
+	getCartValue(cart: Set<Gear>): number {
+		let totVal = 0;
+		cart.forEach(item=> {
+			if (item.cost) {
+				let denom = this.ds.getDenomination(item.denomination);
+				let dVal = denom && denom.value ? denom.value : 1;
+				totVal += item.cost * item.count * dVal;
+			}
+		});
+		return totVal;
+	}	
+		
+	getCharacterDescription(character: Character = this.character): string {
+		let cRace = this.ds.getRace(character.raceName);
+		let gender = (character.gender == 'Male' || character.gender == 'Female') 
+									? character.gender : 'Gender-fluid';
+		let raceAdjective = cRace.adjective;
+		
+		let description = "a " + character.alignmentLaw + "/" + character.alignmentGood;
+		description += ", " + raceAdjective;
+		description += ", " + gender;
+		description += " " + character.className
+		
+		return description;
+		
+	}
 	getClassValidity(className: string, raceName?: string): any {
 		if (!this.character.attributes) return [];
 		raceName = raceName || this.character.raceName || "";
@@ -198,10 +242,14 @@ export class CharacterCreationComponent  {
 		this.draggingKey = '';
 		
 		if (!targetAttribute || !sourceAttribute || sourceAttribute == targetAttribute) return;
+		[sourceAttribute.value, targetAttribute.value] = 
+				[targetAttribute.value, sourceAttribute.value];
+		/**
 		let hold = sourceAttribute.value;
 		sourceAttribute.value = targetAttribute.value;
 		targetAttribute.value = hold;
-		this.ds.updateCharacter(this.character);
+		**/
+		//this.ds.updateCharacter(this.character);
 
 	}
 	
@@ -215,7 +263,7 @@ export class CharacterCreationComponent  {
 
 	toggleAttributeStage() {
 		// if stage is completed, cannot toggle the attributes
-		if (this.character.stage == STAGE.Complete) return;
+		if (this.character.stage > STAGE.Equipment) return;
 		// if stage is details, then moving back to attributes
 		else if (this.character.stage == STAGE.Details) {
 			this.clearDetails() // make sure the details are nulled
@@ -234,15 +282,39 @@ export class CharacterCreationComponent  {
 		else if (this.character.stage == STAGE.Details) {
 			this.generateBeginningBalances(this.character);
 			this.ds.updateCharacter(this.character); // save to firebase	
-			this.character.stage = STAGE.Complete;
-			this.ds.incrementRoll("xpRolls");
+			this.character.stage = STAGE.Equipment;
+			this.character.xpRolls++;
 		// if stage is completed, then move back to details
 		} else {
 			this.clearBeginningBalances(this.character);
-			this.ds.updateCharacter(this.character);
+			this.character.equipment.gear = [];
 			this.character.stage = STAGE.Details;			
 		}
 		this.ds.updateCharacter(this.character);
+	}
+	
+	toggleEquipmentStage() {
+		if (this.character.stage > STAGE.Spells ||
+				this.character.stage < STAGE.Details) return;
+				
+		if (this.character.stage == STAGE.Equipment) {
+
+			if (this.cart.size > 0) {
+				this.clearCart(this.cart);
+			}
+			this.character.stage = STAGE.Spells;
+		} else {
+			this.character.stage = STAGE.Equipment;
+		}
+		this.ds.updateCharacter(this.character);
+		this.isCartShowing = false;
+	}
+	
+	showCart(cart: Set<Gear>, character: Character) {
+		cart = cart || this.cart;
+		character = character || this.character;
+		if (this.isCartShowing) this.clearCart(cart);
+		this.isCartShowing=!this.isCartShowing;
 	}
 	
 	generateBeginningBalances(character: Character) {
@@ -262,11 +334,22 @@ export class CharacterCreationComponent  {
 					this.cs.generateHitPoints(character.className, character.level,
 									this.getAdjustedAttributes(character.attributes, character.raceName));
 	}
+	
 	clearBeginningBalances(character: Character) {
 		character.experiencePoints = 0;
 		character.gold = 0;
 		character.level = 1;
 		character. hitPoints = 0;
+	}
+	
+	clearCart(cart: Set<Gear>, skipConfirmation?: boolean): Promise<Boolean> {
+		cart.forEach(item=> {
+			delete item.count;
+			cart.delete(item)
+		});
+		
+		return new Promise(resolve => resolve(true));
+
 	}
 		
 	isDetailsValid(): boolean {
@@ -278,7 +361,43 @@ export class CharacterCreationComponent  {
 		if (!this.character.name) return false;
 		return true;
 	}
+	
+	isCartBuyable(cart: Set<Gear>): boolean {
+		return cart.size>0;
+	}
 
+	buyCart(cart: Set<Gear>, character: Character): string {
+		cart = cart || this.cart;
+		character = character || this.character;
+		let cost = this.getCartValue(cart);
+		if (cost > character.gold) return 'you don\'t have enough gold';
+		// will be encumbered, warn
+		if (!character.equipment) character.equipment = {gear: new Array()};
+		if (!character.equipment.gear) character.equipment.gear = new Array();
+		let gear = new Set(character.equipment.gear);
+		cart.forEach(item=> {
+			let newItem = Object.assign({},item);
+			let oldItem = this.findMatchingItem(newItem,gear);
+			if (oldItem) oldItem.count += newItem.count
+			else gear.add(newItem);
+		});
+		this.clearCart(cart);
+		character.gold -= cost;
+		character.equipment.gear = Array.from(gear);
+	}
+	
+	findMatchingItem(item: Gear, gear: Set<Gear>): any {
+		let keys = Object.keys(item);
+		let equipment = Array.from(gear);
+		let match = equipment.find( g => {
+			return keys.reduce( ( isMatch, key ) => {
+									if (!isMatch) return isMatch;
+									if (key == 'count') return true;
+									return g[key] == item[key];
+			}, true );
+		});
+		return match;
+	}	
 	/**
 	 * Clear the detail fields
 	 */

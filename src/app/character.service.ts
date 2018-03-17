@@ -1,14 +1,38 @@
 import { Injectable, Inject } from '@angular/core';
 
-import { Roll } from './roll';
+import { Roll } from './shared/roll';
 import { Character, Attribute, SavingThrowDetail } from './character.class';
 import { DataService } from './data.service';
+import { CaseConvertPipe } from './shared/case-convert.pipe';
 
 @Injectable()
 export class CharacterService {
 
-	constructor(@Inject(DataService) private ds: DataService) {}
-
+	constructor(@Inject(DataService) private ds: DataService, 
+							private caseConvert: CaseConvertPipe) {}
+	
+	addAdditionalSpells(spellProgressionTable: any, character: Character) {
+		let spt = Object.assign({},spellProgressionTable);
+		let attributeKey = 'WIS'
+		let attributes = this.getAdjustedAttributesByCharacter(character);
+		let attribute = this.getAttributeByAttributeKey(attributeKey,attributes);
+		let additionalSpellsMod = this.getAbilityModByAbility('additionalSpells', 
+													attribute.key, attribute.value);
+		if (!additionalSpellsMod) return spt;
+		
+		let additionalSpells = additionalSpellsMod.value;
+		// Additional spells are ONLY available if Cleric/Druid can memorizze
+		// AT LEAST one spell of that level
+		
+		Object.keys(spt).forEach(key => {
+			let level:number = +key;
+			if (spt[level] > 0 && additionalSpells.length >= level) {
+				spt[level] += additionalSpells[level-1];
+			}
+		});
+		return spt;
+	}
+	
 	generateAttributesArray(rollNotation: string='5d6k3'): any[] {
 		let attributes: Attribute[] = [];
 		for (let key in this.ds.Attributes) {
@@ -112,6 +136,12 @@ export class CharacterService {
 		}
 		return {ability: abilityKey, attribute: attributeKey, value: value};
 	}
+	
+	getAdjustedAttributesByCharacter(character: Character): Attribute[] {
+		let attributes = this.getAdjustedAttributes(character.attributes,
+												character.raceName, character.className);
+		return attributes;
+	}
 
 	/**
 	 * Get a copy of the attributes array, adjusted for race modifiers
@@ -131,14 +161,22 @@ export class CharacterService {
 		return adjustedAttributes;
 	}
 
+	getAttributeByAttributeKey(attributeKey: string, attributes: Attribute[]): Attribute {
+		for (let i = 0; i < attributes.length; i++) {
+			if (attributes[i].key == attributeKey) return attributes[i];
+		}
+		throw `Attribute Key '${attributeKey}' not found in the passed attribute list`;
+	}
+	
 	getAttributeRaceMod(attributeKey: string, raceName: string, className?: string): number {
 		let race = this.ds.getRace(raceName);
-		if (!race) throw `Invalid Race Name (${raceName})`;
+		if (!race) return 0;
+		
 		let cClass = this.ds.getClass(className);
-		if (className && !cClass) throw `Invalid class Name (${className})`;
+		//if (className && !cClass) throw `Invalid class Name (${className})`;
 
-		let attributeEffect = race.attributeEffects[attributeKey];
-		if (!attributeEffect) throw `Attribute key not found (${attributeKey})`;
+		let attributeEffect = race ? race.attributeEffects[attributeKey] : 0;
+		if (race && !attributeEffect) throw `Attribute key not found (${attributeKey})`;
 
 		let negateMods = cClass && cClass.ignoreAttributeMods && cClass.ignoreAttributeMods[attributeKey];
 
@@ -221,19 +259,26 @@ export class CharacterService {
 
 	getRelevantTables(character: Character): any[] {
 		let tables = [];
+		// Tables are for the specific character level.  They will 
+		// be an object with name, description, and a vlaues object where properties will 
+		// be the header and values will be the table values
 		
 		// everyone gets an attack table
 		let acZeroHit = this.ds.getAcZeroHit(character.className, character.level);
 		let attackTable = {
 			name: 'Attack Table',
 			description: 'd20 value needed to hit against AC...',
-			values: {}
+			details: {
+				headers: [],
+				values: []
+			}
 		};
 		
 		for (let i = -6; i < 10; i++) {
 			let hit = acZeroHit - i;
 			hit = hit > 20 ? 20 : hit < 2 ? 2 : hit;
-			attackTable.values[i] = hit;
+			attackTable.details.headers.push(i);
+			attackTable.details.values.push(hit);
 		}
 		tables.push(attackTable);
 		
@@ -245,18 +290,29 @@ export class CharacterService {
 			let table = {
 				name: 'Turn Undead',
 				description: '2d6 value needed to turn undead of HD...',
-				values: tableValues
+				details: {
+					headers: Object.keys(tableValues),
+					values: Object.keys(tableValues).map((key) => {return tableValues[key]})
+				}
 			}
+				
 			tables.push(table);
 		}
-		
+
 		// Thieves get theifAbility tabler
 		tableValues = this.ds.getTable('thiefSkills',character);
 		if (tableValues) {
+			let skillMods = this.getThiefSkillMods(character);
+			let values = this.ds.addObjectsAndValues(tableValues,skillMods);
 			let table = {
-				name: 'Thief Skills',
+				name: 'Thief Skills (modified)',
 				description: '% chance thief will be able to...',
-				values: tableValues
+				details: {
+					headers: Object.keys(values)
+											.map((key) => {return new CaseConvertPipe().transform(key,'FC')}),
+					values: Object.keys(values)
+										.map((key) => {return Math.round(values[key] * 100) + '%'})
+				}
 			}
 			tables.push(table);
 		}
@@ -264,14 +320,36 @@ export class CharacterService {
 		// magic folks get spell-count table
 		tableValues = this.ds.getTable('spellProgression',character);
 		if (tableValues) {
-			let table = {
-				name: 'Available Spells',
-				description: '# of spells of each level this character can memorize',
-				values: tableValues
-			}
-			tables.push(table);
+			// Characters can have mutiple spell progressions (e.g. rangers
+			// get Druid and Magic-User spells as certain levels).  This
+			// table is arranged {SpellType: {Level: {SpellLevel: number...}}}
+			// we will return this as multiple tables, one for each spell type.
+			// so first we break it out into spell type tables.
+			let tableNames = Object.keys(tableValues);
+			tableNames.forEach((tableName) => {
+				let classTable = tableValues[tableName];
+				let levelTable = classTable[character.level];
+				// supplement with additional spells for Clerics and Druids
+				if (tableName == 'Cleric' || tableName == 'Druid') {
+					levelTable = this.addAdditionalSpells(levelTable, character);
+				}
+				
+				let headers = Object.keys(levelTable);
+				let details = Object.keys(levelTable)
+											.map((key) => {return levelTable[key];});
+				//headers.unshift(" ");
+				//details.unshift(tableName);
+				let table = {
+					name: tableName + ' Spells',
+					description: '# of memorized spells of level...',
+					details: {
+						headers: headers,
+						values: details
+					}
+				}
+				tables.push(table);
+			});
 		}
-
 		return tables;
 	}
 
@@ -302,6 +380,34 @@ export class CharacterService {
 
 	getSpells(className?:string, level?: number): any[] {
 		return this.ds.getSpells(className, level);
+	}
+	
+	getThiefSkillList(): string[] {
+		let cClass = this.ds.getClass('Thief');
+		let skills = cClass['thiefSkills'][1]; // there MUST be a skill list for level 1 thief
+		return Object.keys(skills);
+	}
+	
+	getThiefSkillMods(character: Character): any {
+		// Get Dexterity Modification
+		let attributes = this.getAdjustedAttributes(character.attributes, 
+																			character.raceName, character.className)
+		let attribute: Attribute = this.getAttributeByAttributeKey('DEX',attributes);
+		let abilityMod = this.getAbilityModByAbility('thiefSkill','DEX',attribute.value);
+		// Thief Skill Dex mod is a bare number applied to all thiefSkills, so create
+		// a thiefSkill Object with all the skills set to the mod value
+		let skills = this.getThiefSkillList();
+		let abilityModObject = skills.reduce(
+				(skillObj,skill)=> { 
+							skillObj[skill] = abilityMod.value;
+							return skillObj;
+				}, {});
+		// get race mod
+		let race = this.getRace(character.raceName) || {};
+		let raceSkillMods = race.thiefSkillMods || {};
+		//TODO: What if racethiefskills aren't found?
+		let skillMods = this.ds.addObjectsAndValues(abilityModObject,raceSkillMods);
+		return skillMods;
 	}
 
 	getValidity(attributes?: Attribute[], className?: string, raceName?: string): any {
@@ -424,6 +530,7 @@ export class CharacterService {
 		num = num % 10;
 		return input + ordinalizers[num];
 	}
+	
 	stringifyArrayOrdinally(a: string[], separator: string = ';'): string {
 		let returnString = '';
 		for (let i = 0; i < a.length; i++) {

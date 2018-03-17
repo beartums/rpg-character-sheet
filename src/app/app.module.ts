@@ -25,14 +25,25 @@ import { ObjectAsValuesPipe } from './shared/object-as-values.pipe';
 
 import { NgbModule } from '@ng-bootstrap/ng-bootstrap';
 import { AuthComponent } from './auth/auth.component';
+import { EquipmentComponent } from './equipment/equipment.component';
 
 @NgModule({
   imports:      [ BrowserModule, FormsModule, NgbModule.forRoot(),
 									AngularFireModule.initializeApp(environment.firebase),
 									AngularFireAuthModule, AngularFireDatabaseModule ],
-  declarations: [ AppComponent, CharacterCreationComponent, SavingThrowChartComponent, SelectByLabelComponent, RaceInfoComponent, ClassInfoComponent, ModifierPipe, CaseConvertPipe, ObjectAsValuesPipe, AuthComponent ],
+  declarations: [ AppComponent, 
+									CharacterCreationComponent, 
+									SavingThrowChartComponent, 
+									SelectByLabelComponent, 
+									RaceInfoComponent, 
+									ClassInfoComponent, 
+									ModifierPipe, 
+									CaseConvertPipe, 
+									ObjectAsValuesPipe, 
+									AuthComponent, 
+									EquipmentComponent ],
   bootstrap:    [ AppComponent ],
-	providers: [ AuthService, DataService ],
+	providers: [ AuthService, DataService, CaseConvertPipe ],
 	exports: [ CharacterCreationComponent ],
 })
 export class AppModule { }

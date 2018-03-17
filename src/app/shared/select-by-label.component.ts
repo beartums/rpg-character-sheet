@@ -15,6 +15,7 @@ export class SelectByLabelComponent implements OnChanges {
 	@Input() selected: any;
 	@Output() selectedChange: EventEmitter<boolean> = new EventEmitter<boolean>();
 	@Input() disabled: boolean;
+	@Input() direction: string = 'h';
 
 	@Input() returnObject: string = 'true';
 	@Input() collapseWhenSelected: string = 'false';
@@ -32,6 +33,14 @@ export class SelectByLabelComponent implements OnChanges {
 		let collapseChange = changes["collapseWhenSelected"];
 		if (collapseChange && collapseChange.currentValue.toLowerCase) {
 			this._collapseWhenSelected = collapseChange.currentValue.toLowerCase() !== 'false';
+		}
+		let direction = changes["direction"];
+		if (direction) {
+			let direction2 = direction.currentValue.toLowerCase();
+			if (direction2 == 'h' || direction2 == 'horizontal') direction2 = 'h';
+			if (direction2 == 'v' || direction2 == 'vertical' || direction2 == 'vert') direction2 = 'v';
+			//this.changes['direction'].currentValue=direction;
+			this.direction = direction2
 		}
 	}
 

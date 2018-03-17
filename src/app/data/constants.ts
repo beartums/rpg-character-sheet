@@ -67,13 +67,13 @@ export const ATTRIBUTE_ABILITY_MODIFIERS = {
 	]
 }
 
-export const CURRENCY_VALUES = [
-	{type: "GP", name: "Gold Pieces", value: 1},
-	{type: "PP", name: "Platinum Pieces", value: 10},
-	{type: "EP", name: "Electrum Pieces", value: .5},
-	{type: "SP", name: "Silver Pieces", value: .1},
-	{type: "CP", name: "Copper Pieces", value: .01},
-]
+export const CURRENCY_VALUES = {
+	gp: {type: "gp", name: "Gold Pieces", value: 1},
+	pp: {type: "pp", name: "Platinum Pieces", value: 10},
+	ep: {type: "ep", name: "Electrum Pieces", value: .5},
+	sp: {type: "sp", name: "Silver Pieces", value: .1},
+	cp: {type: "cp", name: "Copper Pieces", value: .01},
+}
 
 export const RACES = [
 
@@ -222,7 +222,7 @@ export const RACES = [
 			"Hide in outdoor cover (90%)",
 			"Hide underground (33%, when silent and motionless)",
 			"Dexterity (+1 to initiative when alone, +1 missile attacks)",
-			"Small (AC -2, when attacked by cratures larger than human)"
+			"Small (AC -2, when attacked by creatures larger than human)"
 		],
 		languages: [
 			"Common", "Halfling", "Dwarvish", "Goblin", "Gnome", "Kobold","Orc"
